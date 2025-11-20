@@ -183,6 +183,15 @@ func NewLSPServiceClientBase(
 		initializeParams.RootURI = "file://" + initializeParams.RootURI
 	}
 
+	// Populate WorkspaceFolders from initialize params
+	if len(initializeParams.WorkspaceFolders) > 0 {
+		for _, folder := range initializeParams.WorkspaceFolders {
+			sc.BaseConfig.WorkspaceFolders = append(sc.BaseConfig.WorkspaceFolders, folder.URI)
+		}
+	} else if initializeParams.RootURI != "" {
+		sc.BaseConfig.WorkspaceFolders = append(sc.BaseConfig.WorkspaceFolders, initializeParams.RootURI)
+	}
+
 	if initializeParams.ProcessID == 0 {
 		initializeParams.ProcessID = int32(os.Getpid())
 	}
@@ -213,6 +222,9 @@ func NewLSPServiceClientBase(
 	} else {
 		sc.Log.Info("using provided connection", "conn", c.RPC)
 		sc.Conn = c.RPC
+		sc.ServerCapabilities = protocol.ServerCapabilities{
+			AssumeWorks: true,
+		}
 	}
 	// Create the caches for the various handler stuffs
 	sc.PublishDiagnosticsCache = NewAwaitCache[string, []protocol.Diagnostic]()
@@ -278,9 +290,18 @@ func (sc *LSPServiceClientBase) GetDependencies(ctx context.Context) (map[uri.UR
 	if cmdStr == "" {
 		return nil, fmt.Errorf("dependency provider path not set")
 	}
+	if len(sc.BaseConfig.WorkspaceFolders) == 0 {
+		return nil, fmt.Errorf("no workspace folders configured")
+	}
 	// Expects dependency provider to output provider.Dep structs to stdout
 	cmd := exec.Command(cmdStr)
-	cmd.Dir = sc.BaseConfig.WorkspaceFolders[0][7:]
+	workspaceURI := sc.BaseConfig.WorkspaceFolders[0]
+	// Remove file:// prefix if present
+	if strings.HasPrefix(workspaceURI, "file://") {
+		cmd.Dir = workspaceURI[7:]
+	} else {
+		cmd.Dir = workspaceURI
+	}
 	dataR, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -353,6 +374,7 @@ func (sc *LSPServiceClientBase) GetAllDeclarations(ctx context.Context, workspac
 	// Client may or may not support the "workspace/symbol" method, so we must
 	// check before calling.
 
+	sc.Log.Info("server caps", "supports", sc.ServerCapabilities.Supports("workspace/symbol"))
 	if sc.ServerCapabilities.Supports("workspace/symbol") {
 		params := protocol.WorkspaceSymbolParams{
 			Query: query,
