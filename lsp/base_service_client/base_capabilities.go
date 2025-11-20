@@ -40,6 +40,7 @@ type ReferencedCondition struct {
 // references.
 func EvaluateReferenced[T base](t T, ctx ctx, cap string, info []byte) (resp, error) {
 	sc := t.GetLSPServiceClientBase()
+	sc.Log.Info("Evaluate Call", "cap", cap, "info", info)
 
 	var cond ReferencedCondition
 	err := yaml.Unmarshal(info, &cond)
@@ -64,7 +65,7 @@ func EvaluateReferenced[T base](t T, ctx ctx, cap string, info []byte) (resp, er
 		for _, ref := range references {
 			// Look for things that are in the location loaded,
 			// Note may need to filter out vendor at some point
-			if !strings.Contains(ref.URI, sc.BaseConfig.WorkspaceFolders[0]) {
+			if len(sc.BaseConfig.WorkspaceFolders) > 0 && !strings.Contains(ref.URI, sc.BaseConfig.WorkspaceFolders[0]) {
 				continue
 			}
 

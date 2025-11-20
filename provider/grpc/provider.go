@@ -192,6 +192,10 @@ func (g *grpcProvider) Init(ctx context.Context, log logr.Logger, config provide
 		return nil, provider.InitConfig{}, err
 	}
 
+	if config.PipeName != "" {
+		config.Initialized = true
+	}
+
 	g.log.Info("provider configuration", "config", config)
 	c := pb.Config{
 		Location:               config.Location,
@@ -308,10 +312,11 @@ func start(ctx context.Context, config provider.Config, log logr.Logger) (*grpc.
 			var conn *grpc.ClientConn
 			var err error
 
-			if config.UseSocket && strings.HasPrefix(config.Address, "unix://") {
+			if config.UseSocket && (strings.HasPrefix(config.Address, "unix://") || strings.HasPrefix(config.Address, "passthrough:")) {
 				// Use socket connection
-				// for windows, we will ise passthrough to connect to the socket
+				// for windows, we will use passthrough to connect to the socket
 				// which is defined in the socket/pipe_windows.go file
+				// Supports: unix://path (Unix) and passthrough:unix://path (Windows)
 				conn, err = socket.ConnectGRPC(config.Address)
 			} else {
 				// Use regular HTTP connection
